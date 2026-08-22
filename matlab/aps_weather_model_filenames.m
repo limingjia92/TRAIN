@@ -38,6 +38,10 @@ for d =1:size(date_before,1)
         %Format ggapYYYYMMDDHHMM.nc
         modelfile_before(d,:) = [weather_model_datapath filesep date_before(d,:) filesep 'ggap' date_before(d,:) time_before(d,:) '.nc']; 
         modelfile_after(d,:) = [weather_model_datapath filesep date_after(d,:) filesep 'ggap' date_after(d,:) time_after(d,:) '.nc'];
+    elseif strcmpi(model_type,'era5')    
+        %Format ggapYYYYMMDDHHMM.nc
+        modelfile_before(d,:) = [weather_model_datapath filesep date_before(d,:) filesep 'ggap' date_before(d,:) time_before(d,:) '.nc']; 
+        modelfile_after(d,:) = [weather_model_datapath filesep date_after(d,:) filesep 'ggap' date_after(d,:) time_after(d,:) '.nc'];
     elseif strcmpi(model_type,'merra') 
         %Format MERRA_YYYYMMDD_HH.hdf
         %modelfile_before(d,:) = [weather_model_datapath filesep date_before(d,:) filesep 'MERRA_' date_before(d,:) '_' time_before(d,1:2) '.hdf'];         

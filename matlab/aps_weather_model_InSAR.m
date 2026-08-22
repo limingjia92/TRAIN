@@ -43,6 +43,7 @@ function [] = aps_weather_model_InSAR(model_type)
 % 10/2016   DB      Change to aps_save command with append functionality.
 % 11/2017   DB      Adding GACOS support, update the wording to inc angle
 %                   as that the correct name
+% 11/2019   MJ      divide the use of "era_datapath" and "era5_datapath"
 
 %% ERA-I, ERA5, WRF, MERRA1-2
 % Filename suffix of the output files
@@ -62,22 +63,25 @@ ll_matfile = getparm_aps('ll_matfile',1);
 ifgday_matfile = getparm_aps('ifgday_matfile');
 
 model_type = lower(model_type);
-if strcmpi(model_type,'era')
+if strcmpi(model_type,'era') 
     weather_model_datapath = getparm_aps('era_datapath',1);
+elseif strcmpi(model_type,'era5')
+    weather_model_datapath = getparm_aps('era5_datapath',1);
 elseif strcmpi(model_type,'merra') || strcmpi(model_type,'merra2')
     weather_model_datapath = getparm_aps('merra_datapath',1);
 elseif strcmpi(model_type,'gacos')
     weather_model_datapath = getparm_aps('gacos_datapath',1);
 else
-    error('Not a supported model: either: ERA, MERRA, MERRA2, GACOS')
+    error('Not a supported model: either: ERA, ERA5, MERRA, MERRA2, GACOS')
 end 
-lambda = getparm_aps('lambda',1)*100;                       % radar wavelength in cm
-datestructure = 'yyyymmdd';                               % assumed date structure for era
-inc_angle =  getparm_aps('look_angle',1);
+
+lambda = getparm_aps('lambda',1)*100;                     % radar wavelength in cm
 % check if wavelength is specified
 if isempty(lambda)
-    error('Specify the wavelength, lambda is empty')
+   error('Specify the wavelength, lambda is empty')
 end
+datestructure = 'yyyymmdd';                               % assumed date structure for era
+inc_angle =  getparm_aps('look_angle',1);
 
 % loading the data
 if strcmp(stamps_processed,'y')

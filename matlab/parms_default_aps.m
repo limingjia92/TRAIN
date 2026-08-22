@@ -42,6 +42,9 @@ function parms_default_aps()
 % 01/2016   DB:     Include powerlaw plane flag
 % 04/2016   DB:     Adding MERRA support
 % 02/2018   KM:     Adding NARR support
+% 11/2019   MJ:     Prefer StaMPS parms.mat for lambda/heading with legacy fallback
+% 10/2024   MJ:     Correct GAMMA UTC minute calculation
+% 08/2026   MJ:     Refine StaMPS parameter inheritance, UTC retrieval logic and DEM default for autoInSAR
 
 parmfile='parms_aps.mat';
 parent_flag=0;
@@ -128,21 +131,42 @@ end
 %% satellite specific
 if ~isfield(parms,'lambda')
     if stamps_flag==1
-        % radar wavelength in [m]
-        lambda_file = 'lambda.1.in';
-        if exist(lambda_file,'file')~=2
-            lambda_file = ['..' filesep lambda_file];
-            if exist(lambda_file,'file')~=2
-                lambda_file = ['..' filesep lambda_file];
+        % Prefer the StaMPS parms.mat value; retain the original
+        % lambda.1.in lookup as a backwards-compatible fallback.
+        lambda_set = 0;
+        stamps_parm_file = 'parms.mat';
+        if exist(stamps_parm_file,'file')~=2
+            stamps_parm_file = ['..' filesep stamps_parm_file];
+            if exist(stamps_parm_file,'file')~=2
+                stamps_parm_file = ['..' filesep stamps_parm_file];
             end
         end
-        if exist(lambda_file,'file')==2
-            parms.lambda = load(lambda_file);
-        else
+        if exist(stamps_parm_file,'file')==2
+            parms_stamps = load(stamps_parm_file);
+            if isfield(parms_stamps,'lambda')
+                parms.lambda = parms_stamps.lambda;
+                lambda_set = 1;
+            end
+        end
+        if lambda_set==0
+            lambda_file = 'lambda.1.in';
+            if exist(lambda_file,'file')~=2
+                lambda_file = ['..' filesep lambda_file];
+                if exist(lambda_file,'file')~=2
+                    lambda_file = ['..' filesep lambda_file];
+                end
+            end
+            if exist(lambda_file,'file')==2
+                parms.lambda = load(lambda_file);
+                lambda_set = 1;
+            end
+        end
+        if lambda_set==0
             fprintf('Set lambda manual in parms_aps! \n')
         end
+        clear lambda_set stamps_parm_file parms_stamps lambda_file
     else
-        parms.lambda = 0.0562;
+        parms.lambda = 0.0556;  % Sentinel-1 C-band default wavelength
         warning_message = 1;
     end
 end
@@ -158,91 +182,127 @@ if ~isfield(parms,'look_angle')
 end
 if ~isfield(parms,'heading')
     if stamps_flag==1
-        % mean heading in [deg]
-        heading_file = 'heading.1.in';
-        if exist(heading_file,'file')~=2
-            heading_file = ['..' filesep heading_file];
-            if exist(heading_file,'file')~=2
-                heading_file = ['..' filesep heading_file];
+        % Prefer the StaMPS parms.mat value; retain the original
+        % heading.1.in lookup as a backwards-compatible fallback.
+        heading_set = 0;
+        stamps_parm_file = 'parms.mat';
+        if exist(stamps_parm_file,'file')~=2
+            stamps_parm_file = ['..' filesep stamps_parm_file];
+            if exist(stamps_parm_file,'file')~=2
+                stamps_parm_file = ['..' filesep stamps_parm_file];
             end
         end
-        if exist(heading_file,'file')==2
-            parms.heading = load(heading_file);
-        else
+        if exist(stamps_parm_file,'file')==2
+            parms_stamps = load(stamps_parm_file);
+            if isfield(parms_stamps,'heading')
+                parms.heading = parms_stamps.heading;
+                heading_set = 1;
+            end
+        end
+        if heading_set==0
+            heading_file = 'heading.1.in';
+            if exist(heading_file,'file')~=2
+                heading_file = ['..' filesep heading_file];
+                if exist(heading_file,'file')~=2
+                    heading_file = ['..' filesep heading_file];
+                end
+            end
+            if exist(heading_file,'file')==2
+                parms.heading = load(heading_file);
+                heading_set = 1;
+            end
+        end
+        if heading_set==0
             fprintf('Set heading manual in parms_aps! \n')
         end
+        clear heading_set stamps_parm_file parms_stamps heading_file
     else
         parms.heading = [];
         warning_message = 1;
     end
 end
-if ~isfield(parms,'UTC_sat')
+if ~isfield(parms,'UTC_sat') || isempty(parms.UTC_sat)
+    % Prefer UTC_sat stored in StaMPS parms.mat.
+    % If unavailable, retrieve from processor-specific metadata.
+
+    UTC_set = 0;
+
     if stamps_flag==1
-        % Satellite heading as a string in 'HH:MM'
-        if strcmpi(getparm('insar_processor'),'gamma')
-            load ps2.mat
-            command_str = ['ls ' datestr(master_day,'yyyymmdd') '*' filesep datestr(master_day,'yyyymmdd') '*slc.par > temp.master.res'];
-            [a,b] = system(command_str);
-            fid=fopen('temp.master.res');
-            
-            if fid>0
-                % getting only one master file back
-                 master_files = textscan(fid,'%s');
-                 master_file = master_files{1}(1);
-                 
-                 % dumping the time information for this file in a UTC file.
-                 command_str = ['echo `grep center\_time\: ' char(master_file) '` > temp.utc'];
-                 
-                 [a,b] = system(command_str);
-                 
-                 if exist('temp.utc')~=2
-                    warning_message = 1;
-                    UTC_sat=[];
-                 else
-                     filetext = strtrim(fileread('temp.utc'));
-                     ix = find(filetext==':');
-                     [a,b] = system('rm temp.utc');
-                     UTC_sat = str2num(filetext(ix(1)+1:end-1));
-                     UTC_hr = floor(UTC_sat/60/60);
-                     UTC_min = floor((UTC_sat-UTC_hr*60)/60);
-                     UTC_hr = num2str(UTC_hr);
-                     UTC_min = num2str(UTC_min);
-                     if length(UTC_min)==1
-                         UTC_min = ['0' UTC_min];
-                     end
-                     if length(UTC_hr)==1
-                         UTC_hr = ['0' UTC_hr];
-                     end
-                     UTC_sat = [UTC_hr ':' UTC_min];
-                 end
-                 clear a b 
-            end
-            fclose(fid);
-        else
-            if exist('master.res')~=2
-                if exist ('../master.res')==2
-                    command_str = 'echo `grep First\_pixel\_azimuth\_time\ \(UTC\)\: ../master.res` > temp.utc';
-                    [a,b] = system(command_str);
-                end
-            else
-                command_str = 'echo `grep First\_pixel\_azimuth\_time\ \(UTC\)\: master.res` > temp.utc';
-                [a,b] = system(command_str);
-            end
-            if exist('temp.utc')~=2
-                warning_message = 1;
-                UTC_sat=[];
-            else
-                filetext = fileread('temp.utc');
-                ix = find(filetext==':');
-                [a,b] = system('rm temp.utc');
-                UTC_sat = filetext(ix(2)-2:ix(3)-1);
-                clear a b 
+        stamps_parm_file = 'parms.mat';
+        if exist(stamps_parm_file,'file')~=2
+            stamps_parm_file = ['..' filesep stamps_parm_file];
+            if exist(stamps_parm_file,'file')~=2
+                stamps_parm_file = ['..' filesep stamps_parm_file];
             end
         end
-    else
-        warning_message = 1;
-        UTC_sat=[];
+
+        if exist(stamps_parm_file,'file')==2
+            parms_stamps = load(stamps_parm_file);
+            if isfield(parms_stamps,'UTC_sat') && ~isempty(parms_stamps.UTC_sat)
+                UTC_sat = parms_stamps.UTC_sat;
+                UTC_set = 1;
+            end
+        end
     end
+
+    if UTC_set==0
+        if stamps_flag==1 && strcmpi(getparm('insar_processor'),'gamma')
+            if exist('psver.mat','file')==2
+                load psver
+                psname = ['ps' num2str(psver)];
+
+                if exist([psname '.mat'],'file')==2
+                    ps_master = load([psname '.mat'],'master_day');
+                    master_date = datestr(ps_master.master_day,'yyyymmdd');
+
+                    master_filepath = [master_date '*slc.par'];
+                    if isempty(dir(master_filepath))
+                        master_filepath = [master_date '*' filesep master_date '*slc.par'];
+                    end
+
+                    if ~isempty(dir(master_filepath))
+                        command_str = ['ls ' master_filepath ' > temp.master.res'];
+                        system(command_str);
+
+                        fid = fopen('temp.master.res');
+                        master_files = textscan(fid,'%s');
+                        fclose(fid);
+
+                        master_file = master_files{1}(1);
+                        system(['echo `grep center\_time\: ' char(master_file) '` > temp.utc']);
+
+                        if exist('temp.utc','file')==2
+                            filetext = strtrim(fileread('temp.utc'));
+                            delete('temp.utc');
+
+                            ix = find(filetext==':');
+                            UTC_sec = str2double(filetext(ix(1)+1:end-1));
+
+                            UTC_hr = floor(UTC_sec/3600);
+                            UTC_min = floor((UTC_sec-UTC_hr*3600)/60);
+
+                            UTC_sat = sprintf('%02d:%02d',UTC_hr,UTC_min);
+                            UTC_set = 1;
+                        end
+                    end
+                end
+            end
+
+            if UTC_set==0
+                warning('GAMMA master *.slc.par file not found. Please set UTC_sat manually using setparm.');
+                UTC_sat=[];
+            end
+
+        elseif stamps_flag==1 && strcmpi(getparm('insar_processor'),'isce')
+            warning('UTC_sat is missing in StaMPS parms.mat for ISCE processing. Please set UTC_sat manually using setparm.');
+            UTC_sat=[];
+
+        else
+            warning('UTC_sat is missing. Please set UTC_sat manually using setparm.');
+            UTC_sat=[];
+        end
+    end
+
     parms.UTC_sat = UTC_sat;
 end
 
@@ -293,7 +353,7 @@ end
 
 if ~isfield(parms,'demfile')
     % dem_resolution in degrees
-    parms.demfile = [pwd filesep 'dummy.dem'];
+    parms.demfile = [pwd filesep 'DEM' filesep '*.dem'];
 end
 %% regarding spectrometer correction:
 if ~isfield(parms,'spectrometer_scaleheight')
@@ -347,6 +407,12 @@ end
 if ~isfield(parms,'era_datapath')
     % ERA-I data path
     parms.era_datapath = [];
+end
+
+%% regarding ERA5
+if ~isfield(parms,'era5_datapath')
+    % ERA5 data path
+    parms.era5_datapath = [];
 end
 
 if ~isfield(parms,'era_data_type')

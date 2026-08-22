@@ -28,6 +28,7 @@ function [gmt5_above, gmt_version,GMT_string]=get_gmt_version()
 % 07/2016   DB      Try to catch the case when the GMT manual was not installed correctly
 % 08/2016   DB      Try cathing in case the library path was not set properly
 % 06/2017   DB      Add linux library path, add gmt string to be preceded by gmt functions in matlab.
+% 11/2019   MJ      Remove "psxy" in line 132 and 145 in "usage: psxy" to suit for gmt version from 4.0 to 6.0
 
 
 % checking if gmt can be called and whether it is gmt or GMT
@@ -111,7 +112,8 @@ if isempty(gmt_version)
    if ~isempty(b)
        ix = findstr('GMT Version',b);
        if ~isempty(ix)
-           gmt_version =strtrim(b(ix+12-1:ix+12-1+2));
+           gmt_version =strtrim(b(ix+12-1:ix+12-1+3));
+		   fprintf(['You are using GMT version: ' gmt_version '\n']);
        else
           error('Could not retrieve your GMT version') 
        end
@@ -129,7 +131,7 @@ gmt_function_does_not_work=1;
 command_str = ['psxy'];
 [gmt_function_does_not_work, b] = system(command_str);
 if ~isempty(b)
-   ix = findstr('usage: psxy',b);
+   ix = findstr('usage: ',b);
    if ~isempty(ix)
        gmt_function_does_not_work = 0;
        % no gmt or GMT is needed in front of the command
@@ -140,7 +142,7 @@ end
 if gmt_function_does_not_work~=0
     [gmt_function_does_not_work, b] = system([GMT_string ' ' command_str]);
     if ~isempty(b)
-       ix = findstr('usage: psxy',b);
+       ix = findstr('usage: ',b);
        if ~isempty(ix)
            gmt_function_does_not_work = 0;
            fprintf(['WARNING: GMT functions need to be preceded by ' GMT_string(1:end-1) ': e.g. ' GMT_string 'xyz2grd \n'])

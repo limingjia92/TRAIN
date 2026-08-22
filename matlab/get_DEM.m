@@ -33,15 +33,18 @@ function [dem,xmin,xmax,ymin,ymax,smpres,nncols,nnrows] = get_DEM()
 % 04/2016   DB  Add option to give DEM with .xml file too
 % 11/2017   DB  finnish xml implementation, allow for gmt string to be
 %               given to call gmt outside matlab
-
+% 11/2019   MJ  Remove the distinguish between int16 and short
+% 10/2024   MJ  Clarify the binary data format parameter used for GMT xyz2grd
+% 08/2026   MJ  Phase-1 stabilization for TRAIN fork:
+%               - verify GMT -Z binary type mapping (c/h/f/d for 1/2/4/8-byte DEM)
+%               - use GMT5/6 +n node-count syntax with -I; keep -di and -r modern options
 
 
 % retreiving which version of GMT this is
 [gmt5_above, gmt_version,GMT_string] = get_gmt_version;
 
 
-
-fig_test = 1;               % when 1 show the dem as debug figure
+fig_test = 0;               % when 1 show the dem as debug figure
 smpdem = 'dem_smp.xyz';     % output file for the DEM
 
 % information read from teh paramter file
@@ -187,42 +190,40 @@ else
 
     %% Getting the DEM precision
     %automatically checking dem format, by hua wang, 26 Feb 2015
+    %Modified by Mingjia, 10/2024
     fid=fopen(demfile,'r');
     fseek(fid, 0, 'eof');
     pos=ftell(fid);
     byte=pos/ncols/nrows;
     fseek(fid, 0, 'bof');
-    switch byte
+    switch byte % the binary data format used in GMT xyz2grd -Z
       case 8 
-          format_dem_str='d';     %double
+          format_dem_str='d';     % 8-byte double float (real8)
       case 4 
-          format_dem_str='f';     %float, real4
+          format_dem_str='f';     % 4-byte single float (real4)
       case 2 
-          format_dem_str='i';     %int16
+          format_dem_str='h';     % 2-byte signed integer (integer2 or short)
       case 1 
-          format_dem_str='h';     %int8
+          format_dem_str='c';     % 1-byte signed integer (integer1 or char)
       otherwise
           error('no such dem format');
     end
-    % give warning as we cannot discriminate between int16 and short
-    if strcmpi(format_dem_str,'i')
-        fprintf('Could be int16 or short format \n')
-    end
+
     fclose(fid);
 
     
 
     format_dem_str_given = [];
     if ~isempty(format)
-        if  strcmpi(format,'r4') || strcmpi(format,'real4')
-           format_dem_str_given='f'; 
-        elseif strcmpi(format,'h') || strcmpi(format,'short')
-            format_dem_str_given='h';   
-            % if the given fortmat is short then update the detection to be short
-            if strcmpi(format_dem_str,'i')
-                format_dem_str = 'h';
-            end
-        end
+        if  strcmpi(format,'r8') || strcmpi(format,'real8')  % GAMMA dem data format
+           format_dem_str_given='d'; 
+        elseif strcmpi(format,'r4') || strcmpi(format,'real4') 
+			format_dem_str_given='f'; 
+		elseif strcmpi(format,'i2') || strcmpi(format,'integer2') || strcmpi(format,'short') % isce2 dem data format
+			format_dem_str_given='h'; 
+		elseif strcmpi(format,'i1') || strcmpi(format,'integer1') || strcmpi(format,'char')
+			format_dem_str_given='c';   
+		end
     end
 
     
@@ -267,30 +268,22 @@ else
       ylast = yfirst + (nrows-1)*ystep;
     end
 
-    if strcmp(pixelreg,'gridline')==0
-      xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+/',num2str(nrows),'+ ',demfile,' -Gtmp.grd -N',num2str(demnull),' -F -ZTL' format_dem_str];
-    else
-      xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+/',num2str(nrows),'+ ',demfile,' -Gtmp.grd -N',num2str(demnull),' -ZTL' format_dem_str];
+    if strcmp(gmt5_above,'y')
+		if strcmp(pixelreg,'gridline')==0
+		  xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+n/',num2str(nrows),'+n ',demfile,' -Gtmp.grd -di',num2str(demnull),' -r -ZTL' format_dem_str];
+		else
+		  xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+n/',num2str(nrows),'+n ',demfile,' -Gtmp.grd -di',num2str(demnull),' -ZTL' format_dem_str];
+		end
+	else
+		if strcmp(pixelreg,'gridline')==0
+		  xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+/',num2str(nrows),'+ ',demfile,' -Gtmp.grd -N',num2str(demnull),' -F -ZTL' format_dem_str];
+		else
+		  xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+/',num2str(nrows),'+ ',demfile,' -Gtmp.grd -N',num2str(demnull),' -ZTL' format_dem_str];
+		end
     end
-    
-    % down-sample dem to the grid as secified by the user with the given resolution    
-    % in case the format is int16 lets first try to see if its not short format
-    if strcmpi(format_dem_str,'i')
-        try
-            aps_systemcall(xyz2grd_cmd);
-        catch
-             fprintf('int16 does not seem to work. Let try short instead \n')
-             format_dem_str='h';
-             if strcmp(pixelreg,'gridline')==0
-                xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+/',num2str(nrows),'+ ',demfile,' -Gtmp.grd -N',num2str(demnull),' -F -ZTL' format_dem_str];
-             else
-                xyz2grd_cmd = [GMT_string 'xyz2grd -R',num2str(xfirst),'/',num2str(xlast),'/',num2str(ylast),'/',num2str(yfirst),' -I',num2str(ncols),'+/',num2str(nrows),'+ ',demfile,' -Gtmp.grd -N',num2str(demnull),' -ZTL' format_dem_str];
-             end
-             aps_systemcall(xyz2grd_cmd);
-        end
-    else
-        aps_systemcall(xyz2grd_cmd);
-    end
+	
+    aps_systemcall(xyz2grd_cmd);
+
 end
 
 % getting the information about the grid dem file
