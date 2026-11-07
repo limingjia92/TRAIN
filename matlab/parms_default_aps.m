@@ -611,7 +611,7 @@ if size(parmfields,1)~=num_fields
                    else
                        value_str = num2str(value);
                    end
-                   logit([parmname,' = ',value_str],'aps.log',parent_flag);
+                   logit([parmname,' = ',value_str],0);
                    clear value_str
                else
                    if size(value,1)>1
@@ -627,7 +627,7 @@ if size(parmfields,1)~=num_fields
                    else
                        value_str = value;
                    end
-                   logit([parmname,' = ',value_str],'aps.log',parent_flag);
+                   logit([parmname,' = ',value_str],0);
                    clear value_str
                end
             end

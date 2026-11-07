@@ -48,11 +48,11 @@ end
 % as well
 if nargin>2 & newflag==1
     if isempty(value)
-        logit([parmname,' = []'],'aps.log',parent_flag);
+        logit([parmname,' = []'],0);
     elseif isnumeric(value)
-        logit([parmname,' = ',num2str(value)],'aps.log',parent_flag);
+        logit([parmname,' = ',num2str(value)],0);
     else
-        logit([parmname,' = ',value],'aps.log',parent_flag);
+        logit([parmname,' = ',value],0);
     end
     parms=setfield(parms,parmname,value);
     save(parmfile,'-struct','parms')
@@ -103,7 +103,7 @@ else
         else
             if nargin<=2 || newflag>=0
               if isempty(value)
-                    logit([parmname,' = []'],'aps.log',parent_flag); 
+                    logit([parmname,' = []'],0); 
               elseif isnumeric(value)  
                    if strcmp(parmname,'powerlaw_xy_res') && size(value,2)==1
                         value = [value value];
@@ -130,7 +130,7 @@ else
                    else
                        value_str = num2str(value);
                    end
-                   logit([parmname,' = ',value_str],'aps.log',parent_flag);
+                   logit([parmname,' = ',value_str],0);
                    clear value_str                           
               else
                   if size(value,1)>1
@@ -155,7 +155,7 @@ else
                        end
                        value_str = value;
                    end
-                   logit([parmname,' = ',value_str],'aps.log',parent_flag);
+                   logit([parmname,' = ',value_str],0);
                    clear value_str
               end
             end
@@ -164,11 +164,11 @@ else
                 if newflag==2
                     localparms=setfield(localparms,parmname,value);
                     save(localparmfile,'-struct','localparms')
-                    logit('Added to LOCAL parameter file','aps.log');
+                    logit('Added to LOCAL parameter file',0);
                 elseif newflag==-1
                     parms=rmfield(parms,parmname);
                     save(parmfile,'-struct','parms')
-                    logit([parmname,' removed from parameter file'],'aps.log',parent_flag);
+                    logit([parmname,' removed from parameter file'],0);
                 elseif newflag==-2
                     localparms=rmfield(localparms,parmname);
                     if size(fieldnames(localparms),1)>1
@@ -176,7 +176,7 @@ else
                     else
                         delete(localparmfile)
                     end
-                    logit([parmname,' removed from LOCAL parameter file'],'aps.log');
+                    logit([parmname,' removed from LOCAL parameter file'],0);
 
                 else
                     error('Invalid value for NEWFLAG')
